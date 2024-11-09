@@ -1,0 +1,70 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger the workflow only when a new tag is pushed
+  workflow_dispatch: # Allows manual triggering of the workflow
+
+jobs:
+  build:
+    name: Build and Package Binaries
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Set up Rust
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+          override: true
+
+      # Build the binary
+      - name: Build binary
+        run: |
+          cargo build --release
+
+      # Package the binary
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          tar -czvf dist/${{ github.event.repository.name }}-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz -C target/release ${{ github.event.repository.name }}
+
+      # Upload the artifacts for release
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ github.event.repository.name }}-x86_64-unknown-linux-gnu
+          path: dist/*.*
+          
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Download artifacts from the build step
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ github.event.repository.name }}-x86_64-unknown-linux-gnu
+          path: dist
+
+      # Publish the release
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: dist/*.*
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
